@@ -1,0 +1,144 @@
+---
+title: "Population loss for GLM"
+author: "Fuheng Cui"
+date: "9/18/2021"
+output: html_document
+---
+
+```{r}
+library(ggplot2)
+library(latex2exp)
+```
+
+theta^*=c(1,2)
+```{r}
+set.seed(2)
+p=2
+n=10000
+n_mc=10000
+X=rnorm(n)
+X=cbind(X,rnorm(n))
+theta_star=c(2,1)
+#theta_star=c(0,0)
+X1=rnorm(n_mc)
+X2=rnorm(n_mc)
+
+iter=1000
+ind=50
+theta0=c(1,2)
+```
+
+# Loss function
+```{r}
+Ln=function(theta,theta_star,p){
+  #X1=rnorm(n_mc)
+  #X2=rnorm(n_mc)
+  RES=((X1*theta_star[1]+X2*theta_star[2])^p-(X1*theta[1]+X2*theta[2])^p)^2
+  return(0.5*mean(RES))
+}
+
+dLn=function(theta,theta_star,p){
+  #X1=rnorm(n_mc)
+  #X2=rnorm(n_mc)
+  p1=(X1*theta_star[1]+X2*theta_star[2])^p-(X1*theta[1]+X2*theta[2])^p
+  p2=(X1*theta[1]+X2*theta[2])^(p-1)
+  p3=p*p2*p1
+  res1=mean(p3*X1)
+  res2=mean(p3*X2)
+  return(-c(res1,res2))
+}
+```
+
+
+#pre-experiment
+```{r}
+iter_pre=10000
+theta1=theta0
+for (i in 1:iter_pre){
+  DLN=dLn(theta1,theta_star,p)
+  theta1=theta1-0.01*DLN
+}
+theta_hat=theta1
+```
+
+
+
+# implement
+```{r}
+theta1=theta0
+L_val=rep(0,iter)
+DIFF=rep(0,iter)
+
+for (i in 1:iter){
+  L_val[i]=Ln(theta1,theta_star,p)
+  DIFF[i]=sqrt(sum((theta1-theta_star)^2))
+  DLN=dLn(theta1,theta_star,p)
+  #theta1=theta1-Ln(theta1,theta_star,p)/(sum(DLN^2))*DLN
+  theta1=theta1-(Ln(theta1,theta_star,p)-Ln(theta_hat,theta_star,p))/(sum(DLN^2))*DLN
+
+}
+
+#plot(L_val,type = "l")
+RR=theta1
+
+theta1=theta0
+L_val_GD=rep(0,iter)
+DIFF_GD=rep(0,iter)
+for (i in 1:iter){
+  L_val_GD[i]=Ln(theta1,theta_star,p)
+  DIFF_GD[i]=sqrt(sum((theta1-theta_star)^2))
+  DLN=dLn(theta1,theta_star,p)
+  theta1=theta1-0.001*DLN
+}
+```
+
+```{r}
+x=c(1:iter,1:iter)
+y1=c(L_val,L_val_GD)
+z1=c(rep("Polyak",iter),rep("GD",iter))
+d1=data.frame(x=x,y=y1,algorithm=z1)
+
+
+x=c(1:iter,1:iter)
+y2=c(DIFF,DIFF_GD)
+z2=c(rep("Polyak",iter),rep("GD",iter))
+d2=data.frame(x=x,y=y2,algorithm=z2)
+```
+
+```{r}
+pLL=ggplot(data=d2,aes(x=x,y=y,color=algorithm,linetype=algorithm))+
+  scale_y_log10()+
+  xlab('Iteration')+
+  ylab('||theta-theta*||')
+
+pLL+geom_line(size=1)+
+  theme_light()+
+  theme(
+    legend.position = c(0.8, 0.98),
+    legend.justification = c(0,1),
+    plot.title = element_text(size=18))+
+  labs(title="Generalized Linear Model with theta*=(2,1)")+
+  theme(legend.title=element_blank())+
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 12),  
+        axis.title.x = element_text(size = 12),
+        axis.title.y = element_text(size = 12))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,233 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+```{r}
+library(ggplot2)
+```
+
+```{r}
+Ln=function(theta,n,X1,X2,Y){
+  inner1=(X1-theta[1])^2+(X2-theta[2])^2
+  inner2=(X1+theta[1])^2+(X2+theta[2])^2
+  res=log(exp(-0.5*inner1)+exp(-0.5*inner2))
+  res=sum(res)
+  return(-1/n*res)
+}
+
+dLn=function(theta,n,X1,X2,Y){
+  inner1=(X1-theta[1])^2+(X2-theta[2])^2
+  inner2=(X1+theta[1])^2+(X2+theta[2])^2
+  p1=(exp(-0.5*inner1)*(X1-theta[1])+exp(-0.5*inner2)*(-X1-theta[1]))/(exp(-0.5*inner1)+exp(-0.5*inner2))
+  p2=(exp(-0.5*inner1)*(X2-theta[2])+exp(-0.5*inner2)*(-X2-theta[2]))/(exp(-0.5*inner1)+exp(-0.5*inner2))
+  res=c(sum(p1),sum(p2))
+  return(-1/n*res)
+}
+
+```
+
+```{r}
+iter_func=function(c2,n,delta){
+  res=c2*log(n/(2*log(1/delta)))
+  return(res)
+}
+
+error_func=function(c1,n,delta){
+  res=c1*sqrt(2*log(1/delta)/n)
+  return(res)
+}
+
+error_func0=function(c1,n,delta){ #p=2
+  res=c1*sqrt(sqrt(2*log(1/delta)/n))
+  return(res)
+}
+
+```
+
+
+```{r}
+impl_GMM=function(n,theta0,theta_star,rho,iter,eps){
+  U=runif(n)-0.5
+  X1=rnorm(n,mean = sign(U)*theta_star[1], sd=1)
+  X2=rnorm(n,mean = sign(U)*theta_star[2], sd=1)
+  
+  
+  c_u=1.5*n
+  c_l=0
+  K=5
+  c=(c_u+c_l)/2
+  CC=rep(0,iter)
+  
+  theta1=theta0
+  OPT_P=theta1
+  CON_P=theta1
+  
+  L_val=rep(0,iter)
+  L_min=rep(0,iter+1)
+  DIFF=rep(0,iter)
+  ITER=0
+  CON_ITER=0
+  IT=-1
+  IT_GD=IT
+  
+  #ERROR=error_func0(1.5,n,0.01)
+  ERROR=error_func(1,n,0.01)
+  
+  L_min[1]=Ln(theta1,n,X1,X2,Y)
+  L_CON=L_min[1]
+  
+  for (i in 1:iter){
+    
+    L_val[i]=Ln(theta1,n,X1,X2,Y)
+    if(L_val[i]-L_CON<(-eps)){
+      CON_P=theta1
+      CON_ITER=i
+      L_CON=L_val[i]
+    }
+    
+    
+    DIFF[i]=sqrt(sum((abs(theta1)-theta_star)^2))
+    DLN=dLn(theta1,n,X1,X2,Y)
+    theta1=theta1-(Ln(theta1,n,X1,X2,Y)-c/n)/(sum(DLN^2))*DLN
+    
+    
+    if(i%%K==0){
+    if (sum(((Ln(theta1,n,X1,X2,Y)-c/n)/(sum(DLN^2))*DLN)^2)<10^(-3)){
+      c_u=c
+      c=(c_l+c)/2
+      #c=c/2
+    }
+    else{
+      #if(sum(((Ln(theta1,n,X1,X2,Y)-c/n)/(sum(DLN^2))*DLN)^2)>1)
+        {
+        c_l=c
+        c=(c_u+c)/2
+        #c=c*2
+      }
+    }
+    }
+  
+    CC[i]=c
+    
+    
+    if (sum((theta1-theta_star)^2)>rho^2){
+      if(sum((theta1-theta_star)^2)==Inf){
+        theta1=theta_star+rho*DLN/sqrt(sum(DLN^2))
+      }
+      else{
+        theta1=theta_star+rho*(theta1-theta_star)/sqrt(sum((theta1-theta_star)^2))
+      }
+    }
+    
+    if(Ln(theta1,n,X1,X2,Y)<L_min[i]){
+      L_min[i+1]=Ln(theta1,n,X1,X2,Y)
+      ITER=i
+      OPT_P=theta1
+    }
+    else
+    {
+      L_min[i+1]=L_min[i]
+    }
+    
+    if(sum((theta1-theta_star)^2)<=ERROR^2){
+      IT=i
+      break
+    }
+    
+    
+  }
+  
+  
+  #############################GD
+  theta1=theta0
+  
+  L_val_GD=rep(0,iter)
+  L_min_GD=rep(0,iter+1)
+  DIFF_GD=rep(0,iter)
+  ITER_GD=0
+  CON_ITER_GD=0
+  OPT_P_GD=theta1
+  CON_P_GD=theta1
+  
+  L_min_GD[1]=Ln(theta1,n,X1,X2,Y)
+  L_CON_GD=L_min_GD[1]
+  
+  for (i in 1:iter){
+    L_val_GD[i]=Ln(theta1,n,X1,X2,Y)
+    if(L_val_GD[i]-L_CON_GD<(-eps)){
+      CON_P_GD=theta1
+      CON_ITER_GD=i
+      L_CON_GD=L_val_GD[i]
+    }
+    
+    DIFF_GD[i]=sqrt(sum((abs(theta1)-theta_star)^2))
+    DLN=dLn(theta1,n,X1,X2,Y)
+    theta1=theta1-0.05*DLN
+    
+    if(Ln(theta1,n,X1,X2,Y)<L_min_GD[i]){
+      L_min_GD[i+1]=Ln(theta1,n,X1,X2,Y)
+      ITER_GD=i
+      OPT_P_GD=theta1
+    }
+    else{
+      L_min_GD[i+1]=L_min_GD[i]
+    }
+    if(sum((theta1-theta_star)^2)<=ERROR^2){
+      IT_GD=i
+      break
+    }
+    
+  }
+  return(list(L_val=L_val,L_min=L_min,DIFF=DIFF,IT=IT,OPT_P=OPT_P,CON_P=CON_P,CON_ITER=CON_ITER,L_val_GD=L_val_GD,L_min_GD=L_min_GD,DIFF_GD=DIFF_GD,IT_GD=IT_GD,OPT_P_GD=OPT_P_GD,CON_P_GD=CON_P_GD,CON_ITER_GD=CON_ITER_GD))
+}
+  
+  
+  
+```
+
+
+```{r}
+iter=1000
+theta0=c(3,3)
+theta_star=c(6,6)
+#theta0=c(3,4)/11
+#theta_star=c(0,0)
+rho=5
+eps=10^(-5)
+```
+
+
+```{r}
+set.seed(2)
+RN=seq(1000,100000,by = 1000)
+RN_GD=RN
+
+RN_CON=RN
+RN_CON_GD=RN
+
+ITER_NEED=RN
+ITER_NEED_GD=RN
+
+CON_NEED=RN
+CON_NEED_GD=RN
+
+for (i in 1:length(RN)){
+  print(i)
+  KK=impl_GMM(RN[i],theta0,theta_star,rho,iter,eps)
+  
+  RN[i]=sqrt(sum((abs(KK$OPT_P)-theta_star)^2))
+  RN_GD[i]=sqrt(sum((abs(KK$OPT_P_GD)-theta_star)^2))
+  
+  RN_CON[i]=sqrt(sum((abs(KK$CON_P)-theta_star)^2))
+  RN_CON_GD[i]=sqrt(sum((abs(KK$CON_P_GD)-theta_star)^2))
+  
+  ITER_NEED[i]=KK$IT
+  ITER_NEED_GD[i]=KK$IT_GD
+  
+  CON_NEED[i]=KK$CON_ITER
+  CON_NEED_GD[i]=KK$CON_ITER_GD
+}
+
+RES=list(RN=RN,RN_GD=RN_GD,RN_CON=RN_CON,RN_CON_GD=RN_CON_GD,ITER_NEED=ITER_NEED,ITER_NEED_GD=ITER_NEED_GD,CON_NEED=CON_NEED,CON_NEED_GD=CON_NEED_GD)
+
+```

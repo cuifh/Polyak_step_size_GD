@@ -1,0 +1,134 @@
+---
+title: "Population Loss for GMM"
+output: html_notebook
+---
+```{r}
+library(ggplot2)
+```
+
+
+# MLR
+
+```{r}
+set.seed(1)
+n=10000
+n_mc=10000
+#theta_star=c(0,0) # star(0,0) ini(3,3)
+theta_star=c(2,1) # star(2,1) ini(3,3) non-convex
+
+X1=rnorm(n_mc)
+X2=rnorm(n_mc)
+U=runif(n_mc)-0.5
+in_prod=X1*theta_star[1]+X2*theta_star[2]
+Y=rnorm(n_mc,mean = sign(U)*in_prod, sd=1)
+p=2
+
+iter=1000
+theta0=c(5,5)
+```
+
+# Loss function
+```{r}
+Ln=function(theta,theta_star,p){
+  in_prod=X1*theta[1]+X2*theta[2]
+  #p1=-0.5*sum(theta^2)
+  p1=-0.5*in_prod^2
+  p2=exp(Y*(in_prod))+exp(-Y*(in_prod))
+  p2=log(p2)
+  return(-mean(p1+p2)+5)
+}
+
+dLn=function(theta,theta_star,p){
+  in_prod=X1*theta[1]+X2*theta[2]
+  p1=(exp(Y*in_prod)*Y-exp(-Y*in_prod)*Y)/(exp(Y*in_prod)+exp(-Y*in_prod))
+  c1=mean(-in_prod*X1+p1*X1)
+  c2=mean(-in_prod*X2+p1*X2)
+  return(-c(c1,c2))
+}
+```
+
+
+#pre-experiment
+```{r}
+iter_pre=10000
+theta1=theta0
+QQQ=rep(0,iter_pre)
+for (i in 1:iter_pre){
+  DLN=dLn(theta1,theta_star,p)
+  theta1=theta1-0.01*DLN
+  QQQ[i]=Ln(theta1,theta_star,p)
+}
+theta_hat=theta1
+```
+
+
+
+
+# implement
+#may suboptimal because Ln(theta_star,theta_star,p) is approximated.
+```{r}
+theta1=theta0
+L_val=rep(0,iter)
+DIFF=rep(0,iter)
+
+for (i in 1:iter){
+  L_val[i]=Ln(theta1,theta_star,p)
+  DIFF[i]=sqrt(sum((theta1-theta_star)^2))
+  DLN=dLn(theta1,theta_star,p)
+  #theta1=theta1-(Ln(theta1,theta_star,p)-Ln(theta_star,theta_star,p))/(sum(DLN^2))*DLN
+  theta1=theta1-(Ln(theta1,theta_star,p)-Ln(theta_hat,theta_star,p))/(sum(DLN^2))*DLN
+  #theta1=theta1-(Ln(theta1,theta_star,p)-2.17)/(sum(DLN^2))*DLN
+}
+
+#plot(L_val,type = "l")
+RR=theta1
+
+theta1=theta0
+L_val_GD=rep(0,iter)
+DIFF_GD=rep(0,iter)
+for (i in 1:iter){
+  L_val_GD[i]=Ln(theta1,theta_star,p)
+  DIFF_GD[i]=sqrt(sum((theta1-theta_star)^2))
+  DLN=dLn(theta1,theta_star,p)
+  theta1=theta1-0.01*DLN
+}
+
+
+
+```
+
+
+
+```{r}
+x=c(1:iter,1:iter)
+y1=c(L_val,L_val_GD)
+z1=c(rep("Polyak",iter),rep("GD",iter))
+d1=data.frame(x=x,y=y1,algorithm=z1)
+
+
+x=c(1:iter,1:iter)
+y2=c(DIFF,DIFF_GD)
+z2=c(rep("Polyak",iter),rep("GD",iter))
+d2=data.frame(x=x,y=y2,algorithm=z2)
+```
+
+```{r}
+pLL=ggplot(data=d2,aes(x=x,y=y,color=algorithm,linetype=algorithm))+
+  scale_y_log10()+
+  xlab('Iteration')+
+  ylab('||theta-theta*||')
+
+pLL+geom_line(size=1)+
+  theme_light()+
+  theme(
+    legend.position = c(0.8, 0.98),
+    legend.justification = c(0,1),
+    plot.title = element_text(size=18))+
+  labs(title="Mixed Linear Regression with theta*=(2,1)")+
+  theme(legend.title=element_blank())+
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 12),  
+        axis.title.x = element_text(size = 12),
+        axis.title.y = element_text(size = 12))
+```

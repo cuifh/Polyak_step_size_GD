@@ -1,0 +1,236 @@
+---
+title: "Polyak_approximated"
+author: "Fuheng Cui"
+date: "9/18/2021"
+output: html_document
+---
+
+## Add bounds for the solution. (parameter space)
+## Binary search for finding c.
+
+```{r}
+library(ggplot2)
+```
+
+```{r}
+Ln=function(theta,n,X1,X2,Y){
+  in_prod=X1*theta[1]+X2*theta[2]
+  RES=1/(2*n)*sum((Y-in_prod^2)^2)
+  return(RES)
+}
+
+dLn=function(theta,n,X1,X2,Y){
+  in_prod=X1*theta[1]+X2*theta[2]
+  c1=sum((in_prod^2-Y)*in_prod*X1)
+  c2=sum((in_prod^2-Y)*in_prod*X2)
+  RES=c(c1,c2)
+  
+  return(2/n*RES)
+}
+```
+
+```{r}
+iter_func=function(c2,n,delta){
+  res=ceiling(c2*log(n/(2+log(1/delta))))
+  return(res)
+}
+
+error_func=function(c1,n,delta){
+  res=c1*sqrt((2+log(1/delta))/n)
+}
+
+error_func0=function(c1,n,delta,p){ #p=2
+  res=c1*((2+log(1/delta))/n)^(1/(2*p))
+}
+
+```
+
+
+
+```{r}
+impl_GLM=function(n,theta0,theta_star,rho,iter,eps){
+  X1=rnorm(n)
+  X2=rnorm(n)
+  Y=(X1*theta_star[1]+X2*theta_star[2])^2+rnorm(n,sd=0.1)
+  
+  c_u=0.01*sqrt(n)
+  c_l=0
+  K=10
+  c=(c_u+c_l)/2
+  CC=rep(0,iter)
+  
+  theta1=theta0
+  OPT_P=theta1
+  CON_P=theta1
+  
+  L_val=rep(0,iter)
+  L_min=rep(0,iter+1)
+  DIFF=rep(0,iter)
+  ITER=0
+  CON_ITER=0
+  
+  L_min[1]=Ln(theta1,n,X1,X2,Y)
+  L_CON=L_min[1]
+  
+  for (i in 1:iter){
+    
+    L_val[i]=Ln(theta1,n,X1,X2,Y)
+    if(L_val[i]-L_CON<(-eps)){
+      CON_P=theta1
+      CON_ITER=i
+      L_CON=L_val[i]
+    }
+    
+    
+    DIFF[i]=sqrt(sum((abs(theta1)-theta_star)^2))
+    DLN=dLn(theta1,n,X1,X2,Y)
+    theta1=theta1-(Ln(theta1,n,X1,X2,Y)-c/sqrt(n))/(sum(DLN^2))*DLN
+    
+    
+    if(i%%K==0){
+    if (sum(((Ln(theta1,n,X1,X2,Y)-c/sqrt(n))/(sum(DLN^2))*DLN)^2)<10^(-3)){
+      c_u=c
+      c=(c_l+c)/2
+      #c=c/2
+    }
+    else{
+      #if(sum(((Ln(theta1,n,X1,X2,Y)-c/sqrt(n))/(sum(DLN^2))*DLN)^2)>1)
+        {
+        c_l=c
+        c=(c_u+c)/2
+        #c=c*2
+      }
+    }
+    }
+  
+    CC[i]=c
+    
+    
+    if (sum(theta1^2)>rho^2){
+      if(sum(theta1^2)==Inf){
+        theta1=rho*DLN/sqrt(sum(DLN^2))
+      }
+      else{
+        theta1=rho*theta1/sqrt(sum(theta1^2))
+      }
+    }
+    
+    if(Ln(theta1,n,X1,X2,Y)<L_min[i]){
+      L_min[i+1]=Ln(theta1,n,X1,X2,Y)
+      ITER=i
+      OPT_P=theta1
+    }
+    else
+    {
+      L_min[i+1]=L_min[i]
+    }
+
+    
+    
+    
+  }
+  
+  
+  ############################GD
+  theta1=theta0
+  
+  L_val_GD=rep(0,iter)
+  L_min_GD=rep(0,iter+1)
+  DIFF_GD=rep(0,iter)
+  ITER_GD=0
+  CON_ITER_GD=0
+  OPT_P_GD=theta1
+  CON_P_GD=theta1
+  
+  L_min_GD[1]=Ln(theta1,n,X1,X2,Y)
+  L_CON_GD=L_min_GD[1]
+  
+  iter=sqrt(n)
+  
+  for (i in 1:iter){
+    L_val_GD[i]=Ln(theta1,n,X1,X2,Y)
+    if(L_val_GD[i]-L_CON_GD<(-eps)){
+      CON_P_GD=theta1
+      CON_ITER_GD=i
+      L_CON_GD=L_val_GD[i]
+    }
+    
+    
+    DIFF_GD[i]=sqrt(sum((abs(theta1)-theta_star)^2))
+    DLN=dLn(theta1,n,X1,X2,Y)
+    theta1=theta1-0.01*DLN
+    #theta1=theta1-0.05*DLN
+    
+    if(Ln(theta1,n,X1,X2,Y)<L_min_GD[i]){
+      L_min_GD[i+1]=Ln(theta1,n,X1,X2,Y)
+      ITER_GD=i
+      OPT_P_GD=theta1
+    }
+    else{
+      L_min_GD[i+1]=L_min_GD[i]
+    }
+
+    
+  }
+  return(list(L_val=L_val,L_min=L_min,DIFF=DIFF,ITER=ITER,OPT_P=OPT_P,CON_P=CON_P,CON_ITER=CON_ITER,L_val_GD=L_val_GD,L_min_GD=L_min_GD,DIFF_GD=DIFF_GD,ITER_GD=ITER_GD,OPT_P_GD=OPT_P_GD,CON_P_GD=CON_P_GD,CON_ITER_GD=CON_ITER_GD))
+}
+  
+  
+  
+```
+
+
+```{r}
+#iter=250
+#theta0=c(1,0)
+#theta_star=c(0.5,1)
+#iter=2000
+theta0=c(2,1)
+theta_star=c(0,0)
+rho=10
+eps=10^(-5)
+```
+
+
+```{r}
+set.seed(2)
+RN=seq(1000,100000,by = 1000)
+RN_GD=RN
+
+RN_CON=RN
+RN_CON_GD=RN
+
+ITER_NEED=RN
+ITER_NEED_GD=RN
+
+CON_NEED=RN
+CON_NEED_GD=RN
+
+for (i in 1:length(RN)){
+  print(i)
+  iter=iter_func(20,RN[i],0.01)
+  KK=impl_GLM(RN[i],theta0,theta_star,rho,iter,eps)
+  
+  RN[i]=sqrt(sum((abs(KK$OPT_P)-theta_star)^2))
+  RN_GD[i]=sqrt(sum((abs(KK$OPT_P_GD)-theta_star)^2))
+  
+  RN_CON[i]=sqrt(sum((abs(KK$CON_P)-theta_star)^2))
+  RN_CON_GD[i]=sqrt(sum((abs(KK$CON_P_GD)-theta_star)^2))
+  
+  ITER_NEED[i]=KK$ITER
+  ITER_NEED_GD[i]=KK$ITER_GD
+  
+  CON_NEED[i]=KK$CON_ITER
+  CON_NEED_GD[i]=KK$CON_ITER_GD
+}
+
+RES=list(RN=RN,RN_GD=RN_GD,RN_CON=RN_CON,RN_CON_GD=RN_CON_GD,ITER_NEED=ITER_NEED,ITER_NEED_GD=ITER_NEED_GD,CON_NEED=CON_NEED,CON_NEED_GD=CON_NEED_GD)
+```
+
+
+
+
+
+
+
+
